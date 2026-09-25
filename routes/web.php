@@ -1,21 +1,63 @@
 <?php
 
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\TestimonialController;
 use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
 | Halaman publik
 |--------------------------------------------------------------------------
-| Katalog dan detail produk boleh dibaca siapa saja — ini etalase toko.
+| Etalase toko: katalog, detail produk, dan testimoni boleh dibaca siapa saja.
 */
 
 Route::get('/', [HomeController::class, 'index'])->name('home');
 Route::get('/about', [HomeController::class, 'about'])->name('about');
 Route::get('/downloader', [HomeController::class, 'downloader'])->name('downloader');
+Route::get('/testimoni', [TestimonialController::class, 'index'])->name('testimoni');
 Route::get('/products', [ProductController::class, 'index'])->name('product-list');
+
+/*
+|--------------------------------------------------------------------------
+| Memesan — pembeli tidak perlu masuk
+|--------------------------------------------------------------------------
+| Kode pesanan (ORD-YYYYMMDD-XXXXXX) yang menjadi kunci halaman pemesannya.
+| Aksi menulis dibatasi throttle karena rute ini terbuka untuk siapa saja.
+*/
+
+Route::get('/checkout/{product}', [CheckoutController::class, 'create'])->name('checkout');
+
+Route::middleware('throttle:order-create')->group(function () {
+    Route::post('/checkout/{product}', [CheckoutController::class, 'store'])->name('order-store');
+});
+
+Route::middleware('throttle:order-claim')->group(function () {
+    Route::post('/orders/{order:order_code}/claim', [OrderController::class, 'claim'])->name('order-claim');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Halaman pesanan (publik) + kelola pesanan (penjual)
+|--------------------------------------------------------------------------
+| {order:order_code} mengikat model lewat kode pesanan, bukan id, jadi alamatnya
+| tidak bisa ditebak berurutan. `/orders` (daftar kelola) tidak bentrok dengan
+| `/orders/{order}` karena jumlah segmennya berbeda.
+*/
+
+Route::get('/orders/{order:order_code}', [OrderController::class, 'show'])->name('order-show');
+
+Route::middleware('auth')->group(function () {
+    Route::get('/orders', [OrderController::class, 'index'])->name('order-list');
+
+    Route::middleware('throttle:order-status')->group(function () {
+        Route::post('/orders/{order:order_code}/status', [OrderController::class, 'updateStatus'])->name('order-status');
+        Route::post('/orders/{order:order_code}/reject-claim', [OrderController::class, 'rejectClaim'])->name('order-claim-reject');
+    });
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -55,7 +97,7 @@ Route::get('/products/{product}', [ProductController::class, 'show'])->name('pro
 | Login — hanya untuk tamu
 |--------------------------------------------------------------------------
 | Middleware `guest` memantulkan penjual yang sudah masuk kembali ke beranda
-| (lihat redirectUsersTo di bootstrap/app.php).
+| (lihat redirectGuestsTo di bootstrap/app.php).
 */
 
 Route::middleware('guest')->group(function () {

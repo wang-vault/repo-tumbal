@@ -62,24 +62,31 @@
                     </div>
                 </dl>
 
-                @auth
+                @if ($product->is_active)
                     <div class="form-actions">
-                        <a href="{{ route('product-edit', $product) }}" class="btn-primary">Ubah Produk</a>
-                        <form action="{{ route('product-destroy', $product) }}" method="post" class="inline-form">
-                            @csrf
-                            @method('delete')
-                            <button type="submit" class="btn-danger"
-                                    onclick="return confirm(@js("Yakin hapus {$product->name}?"))">Hapus Produk</button>
-                        </form>
+                        <a href="{{ route('checkout', $product) }}" class="btn-primary">Pesan Produk Ini →</a>
+                        @auth
+                            <a href="{{ route('product-edit', $product) }}" class="btn-secondary">Ubah Produk</a>
+                            <form action="{{ route('product-destroy', $product) }}" method="post" class="inline-form">
+                                @csrf
+                                @method('delete')
+                                <button type="submit" class="btn-danger"
+                                        onclick="return confirm(@js("Yakin hapus {$product->name}?"))">Hapus Produk</button>
+                            </form>
+                        @endauth
                     </div>
                 @else
                     <div class="form-actions">
                         <p class="detail-copy detail-copy--muted">
-                            Hanya penjual yang sudah masuk yang bisa mengubah produk ini.
-                            <a href="{{ route('login') }}" class="paper-link">Masuk</a>
+                            Produk ini sedang nonaktif, jadi tidak bisa dipesan.
+                            @auth
+                                <a href="{{ route('product-edit', $product) }}" class="paper-link">Aktifkan lagi</a>
+                            @else
+                                <a href="{{ route('product-list') }}" class="paper-link">Lihat produk lain</a>
+                            @endauth
                         </p>
                     </div>
-                @endauth
+                @endif
             </div>
         </div>
     </div>

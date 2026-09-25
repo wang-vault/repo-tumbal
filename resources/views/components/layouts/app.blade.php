@@ -47,6 +47,12 @@
                    class="masthead-nav-link {{ request()->routeIs('home') ? 'is-active' : '' }}">Beranda</a>
                 <a href="{{ route('product-list') }}"
                    class="masthead-nav-link {{ request()->routeIs('product-*') ? 'is-active' : '' }}">Katalog Produk</a>
+                <a href="{{ route('testimoni') }}"
+                   class="masthead-nav-link {{ request()->routeIs('testimoni') ? 'is-active' : '' }}">Testimoni</a>
+                @auth
+                    <a href="{{ route('order-list') }}"
+                       class="masthead-nav-link {{ request()->routeIs('order-*') ? 'is-active' : '' }}">Pesanan</a>
+                @endauth
                 <a href="{{ route('about') }}"
                    class="masthead-nav-link {{ request()->routeIs('about') ? 'is-active' : '' }}">Tentang</a>
                 <span class="masthead-nav-edition">Edisi No. 01</span>
@@ -63,6 +69,15 @@
         @if (session('success'))
             <div class="container-x">
                 <p class="alert-info">{{ session('success') }}</p>
+            </div>
+        @endif
+
+        {{-- Pesan flash untuk tindakan yang ditolak (misalnya produk yang sudah
+             pernah dipesan tidak boleh dihapus, atau perpindahan status yang
+             tidak diizinkan). Class .alert-warn sudah ada di anubis.css. --}}
+        @if (session('error'))
+            <div class="container-x">
+                <p class="alert-warn">{{ session('error') }}</p>
             </div>
         @endif
 
@@ -100,7 +115,9 @@
                 <div class="site-footer-links">
                     <a href="{{ route('home') }}" class="site-footer-link">Beranda</a>
                     <a href="{{ route('product-list') }}" class="site-footer-link">Katalog produk</a>
+                    <a href="{{ route('testimoni') }}" class="site-footer-link">Testimoni</a>
                     @auth
+                        <a href="{{ route('order-list') }}" class="site-footer-link">Kelola pesanan</a>
                         <a href="{{ route('product-create') }}" class="site-footer-link">Tambah produk</a>
                     @endauth
                     <a href="{{ route('downloader') }}" class="site-footer-link">Downloader</a>

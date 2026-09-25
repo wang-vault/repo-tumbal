@@ -69,6 +69,12 @@
                             <td>
                                 <div class="row-actions">
                                     <a href="{{ route('product-show', $product) }}">Detail</a>
+                                    @guest
+                                        @if ($product->is_active)
+                                            <span class="sep">|</span>
+                                            <a href="{{ route('checkout', $product) }}">Pesan</a>
+                                        @endif
+                                    @endguest
                                     @auth
                                         <span class="sep">|</span>
                                         <a href="{{ route('product-edit', $product) }}">Edit</a>

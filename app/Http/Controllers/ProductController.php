@@ -82,6 +82,16 @@ class ProductController extends Controller
     public function destroy(Product $product): RedirectResponse
     {
         $name = $product->name;
+
+        // Kolom orders.product_id memakai restrictOnDelete: produk yang sudah
+        // pernah dipesan ditolak database supaya riwayat pesanan tetap utuh.
+        // Diperiksa lebih dulu di sini supaya pesannya ramah, bukan error 500.
+        if ($product->orders()->exists()) {
+            return redirect()
+                ->route('product-list')
+                ->with('error', 'Produk "'.$name.'" sudah pernah dipesan, jadi tidak bisa dihapus. Nonaktifkan saja supaya tidak muncul lagi di katalog pembeli.');
+        }
+
         $product->delete();
 
         return redirect()
