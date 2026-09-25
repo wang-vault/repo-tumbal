@@ -9,7 +9,7 @@ class ProductSeeder extends Seeder
 {
     /**
      * Enam produk pilihan (supaya tampilan beranda selalu sama) + empat produk
-     * acak dari factory untuk menguji pagination/pencarian.
+     * acak dari factory supaya katalog dan pencarian punya cukup baris.
      */
     public function run(): void
     {

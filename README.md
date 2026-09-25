@@ -26,7 +26,7 @@ controller/model/migration/factory/seeder untuk satu entitas (di contoh: `Studen
 | Downloader `/downloader` | Halaman statis 3 platform (TikTok, YouTube, Instagram) |
 | Tampilan | CSS statis `public/css/anubis.css` — gaya koran: kertas hangat, tinta, aksen oxblood, sudut tajam, bayangan offset |
 | Login penjual | `POST /login` berbasis session + pembatasan 5 percobaan/menit; semua rute tulis dilindungi middleware `auth` |
-| Test | 26 pengujian: `AuthTest` (13 — login & hak akses), `ProductTest` (12 — katalog & CRUD), `ExampleTest` (1) |
+| Test | 27 pengujian: `AuthTest` (13 — login & hak akses), `ProductTest` (12 — katalog & CRUD), `ExampleTest` bawaan skeleton (2 — feature + unit) |
 
 **Tidak perlu `npm install` / `npm run build`.** Layout memakai `<link rel="stylesheet">` ke CSS
 statis, bukan `@vite`, jadi `php artisan serve` langsung menampilkan tampilan lengkap. (Vite +
@@ -100,7 +100,7 @@ php artisan serve                      # http://127.0.0.1:8000
 Menjalankan test:
 
 ```bash
-php artisan test                    # semua test (26)
+php artisan test                    # semua test (27)
 php artisan test --filter=AuthTest     # khusus login & hak akses
 php artisan test --filter=ProductTest  # khusus produk
 ```
@@ -202,6 +202,25 @@ Content hash lock file sudah diverifikasi cocok dengan `composer.json`.
 
 Kalau nanti kamu menambah paket baru, jalankan `composer require <paket>` dan commit `composer.lock`
 yang berubah.
+
+## Batasan port ini (yang sengaja belum ada)
+
+Port ini memindahkan **etalase toko** (beranda, katalog, detail produk) + **login penjual** +
+**CRUD produk**. Aplikasi Anubis aslinya lebih besar; bagian berikut belum ikut dipindahkan.
+
+| Belum ada | Kondisi di Anubis asli | Catatan |
+|---|---|---|
+| Halaman `/testimoni` | otomatis dari pesanan berstatus `DONE` (maks 20 terbaru), hanya kolom non-sensitif, nama pembeli dipendekkan jadi "Budi S." | ikut tersendat karena sumbernya tabel `orders` yang belum diporting; bisa dibuat versi statis dulu kalau memang perlu |
+| Pesanan & pembayaran | `/checkout`, `/orders`, `/orders/{code}`, `/orders/{code}/receipt`, `/pay/{code}` + tabel `orders` dan `manual_payment_settings` (manual, Stenly, WhatsApp) | di aslinya pembayaran manual lewat WhatsApp; port ini berhenti di katalog |
+| Panel admin terpisah | `/admin` (dashboard), `/admin/products`, `/admin/orders`, `/admin/settings` | di sini digabung: `/products` berubah jadi daftar kelola setelah penjual masuk |
+| Downloader yang berfungsi | benar-benar mengunduh dari YouTube/audio/Instagram/TikTok lewat 8 rute API | di sini hanya tiruan tampilan, sesuai kesepakatan awal |
+| Registrasi, lupa/reset password, verifikasi email | ada di `/auth/*` | di sini satu akun demo dari seeder: `admin@anubis.test` / `password` |
+| Tabel `profiles` | `supabase/account/001_schema.sql` | port ini memakai tabel `users` bawaan Laravel apa adanya |
+| Halaman error bergaya Anubis | `not-found.tsx` | masih memakai 404/403/500 bawaan Laravel |
+| Pagination katalog | daftar produk dipaginasi | `ProductController::index()` masih `->get()`; pencarian `?q=` sudah jalan |
+| Unggah gambar produk | unggah berkas ke storage | di sini hanya kolom `image_url`; kalau kosong, kartu produk menampilkan inisial nama |
+| Policy / banyak penjual | tiap penjual punya produknya | belum ada `Policy`/`Gate`: penjual mana pun yang masuk boleh mengubah produk mana pun |
+| CI, `LICENSE`, `lang/id` | ada workflow & berkas bahasa | belum disertakan |
 
 ## Kredit
 
