@@ -57,7 +57,7 @@ class OrderFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'order_status' => Order::STATUS_PAID,
-            'payment_status' => 'PAID',
+            'payment_status' => Order::PAYMENT_PAID,
             'paid_at' => now()->subDay(),
             'manual_claim_at' => now()->subDays(1)->subHours(2),
             'manual_reviewed_at' => now()->subDay(),
@@ -69,7 +69,7 @@ class OrderFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'order_status' => Order::STATUS_PROCESSING,
-            'payment_status' => 'PAID',
+            'payment_status' => Order::PAYMENT_PAID,
             'paid_at' => now()->subDays(2),
             'manual_reviewed_at' => now()->subDays(2),
             'manual_review_status' => 'APPROVED',
@@ -83,7 +83,7 @@ class OrderFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'order_status' => Order::STATUS_DONE,
-            'payment_status' => 'PAID',
+            'payment_status' => Order::PAYMENT_PAID,
             'paid_at' => now()->subDays(6),
             'manual_reviewed_at' => now()->subDays(6),
             'manual_review_status' => 'APPROVED',

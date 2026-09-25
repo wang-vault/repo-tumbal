@@ -113,8 +113,8 @@
                     <div>
                         <dt>Status bayar</dt>
                         <dd>
-                            <span class="badge {{ $order->payment_status === 'PAID' ? 'badge-done' : 'badge-wait' }}">
-                                {{ $order->payment_status === 'PAID' ? 'Lunas' : 'Belum lunas' }}
+                            <span class="badge {{ $order->isPaid() ? 'badge-done' : 'badge-wait' }}">
+                                {{ $order->payment_label }}
                             </span>
                             @if ($order->paid_at)
                                 · {{ $order->paid_at->translatedFormat('j F Y, H:i') }}
@@ -210,10 +210,19 @@
                         @endforelse
 
                         <div class="form-actions">
+                            <a href="{{ route('order-edit', $order->order_code) }}" class="btn-secondary">Ubah pesanan</a>
                             @if ($order->product)
                                 <a href="{{ route('product-edit', $order->product) }}" class="btn-secondary">Ubah produknya</a>
                             @endif
                             <a href="{{ route('order-list') }}" class="btn-secondary">← Semua pesanan</a>
+                            <form action="{{ route('order-destroy', $order->order_code) }}" method="post" class="inline-form">
+                                @csrf
+                                @method('delete')
+                                <button type="submit" class="btn-danger"
+                                        onclick="return confirm(@js("Hapus pesanan {$order->order_code}? Tindakan ini tidak bisa dibatalkan."))">
+                                    Hapus pesanan
+                                </button>
+                            </form>
                         </div>
                     </div>
                 @else

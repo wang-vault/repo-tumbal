@@ -5,10 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
- * Halaman pesanan (publik, kuncinya kode pesanan) + daftar kelola penjual.
+ * Halaman pesanan (publik, kuncinya kode pesanan) + kelola pesanan penjual.
+ *
+ * Sisi penjual lengkap selain baca: ubah (data pembeli, jumlah, harga, status
+ * pembayaran) dan hapus. Membuat pesanan tetap lewat checkout, bukan di sini.
  *
  * Alur manual yang dipakai:
  *   1. pembeli membuat pesanan            -> order_status PENDING
@@ -23,29 +27,47 @@ class OrderController extends Controller
 {
     /**
      * Daftar kelola pesanan — khusus penjual yang sudah masuk.
+     *
+     * Dua saringan bisa dipakai bersamaan: ?status= (alur pesanan) dan
+     * ?payment= (status pembayaran), jadi penjual bisa mencari misalnya
+     * "pesanan yang sudah lunas tapi belum diproses".
      */
     public function index(Request $request): View
     {
         $status = strtoupper(trim((string) $request->query('status', '')));
+        $payment = strtoupper(trim((string) $request->query('payment', '')));
+
+        $status = in_array($status, array_keys(Order::TRANSITIONS), true) ? $status : '';
+        $payment = in_array($payment, Order::PAYMENT_STATUSES, true) ? $payment : '';
 
         $orders = Order::query()
             ->with('product')
-            ->status($status === '' ? null : $status)
+            ->status($status)
+            ->payment($payment)
             ->latest()
             ->latest('id')
             ->paginate(12)
             ->withQueryString();
 
-        // Angka di tombol saring status, biar penjual tahu antreannya berapa.
+        // Angka di tombol saring, biar penjual tahu antreannya berapa. Sengaja
+        // dihitung dari seluruh pesanan (tanpa saringan) supaya tombol lain
+        // tetap menampilkan jumlah yang masuk akal.
         $counts = Order::query()
             ->selectRaw('order_status, count(*) as total')
             ->groupBy('order_status')
             ->pluck('total', 'order_status');
 
+        $paymentCounts = Order::query()
+            ->selectRaw('payment_status, count(*) as total')
+            ->groupBy('payment_status')
+            ->pluck('total', 'payment_status');
+
         return view('orders.index', [
             'orders' => $orders,
-            'status' => in_array($status, array_keys(Order::TRANSITIONS), true) ? $status : '',
+            'status' => $status,
+            'payment' => $payment,
             'counts' => $counts,
+            'paymentCounts' => $paymentCounts,
             'total' => Order::count(),
         ]);
     }
@@ -171,5 +193,109 @@ class OrderController extends Controller
         ]);
 
         return $back->with('error', 'Klaim pembayaran ditolak. Pembeli bisa mengirim ulang buktinya.');
+    }
+
+    /**
+     * Form ubah pesanan — khusus penjual. Dipakai untuk memperbaiki salah tulis
+     * data pembeli, menyesuaikan jumlah/harga setelah negosiasi, atau menandai
+     * pembayaran sudah lunas tanpa mengubah alur status.
+     */
+    public function edit(Order $order): View
+    {
+        $order->loadMissing('product');
+
+        return view('orders.edit', compact('order'));
+    }
+
+    /**
+     * Simpan perubahan pesanan. Total tidak diterima dari form: selalu dihitung
+     * ulang oleh model (harga satuan x jumlah) supaya tidak bisa meleset.
+     */
+    public function update(Request $request, Order $order): RedirectResponse
+    {
+        $back = redirect()->route('order-show', $order->order_code);
+
+        // Nomor dinormalkan lebih dulu (0812… -> 62812…), sama seperti checkout.
+        $request->merge([
+            'buyer_whatsapp' => Order::normalizeWhatsapp($request->string('buyer_whatsapp')->toString()),
+        ]);
+
+        $data = $request->validate([
+            'quantity' => ['required', 'integer', 'min:1', 'max:'.Order::MAX_QUANTITY],
+            'unit_price_snapshot' => ['required', 'integer', 'min:1000', 'max:100000000'],
+            'buyer_name_snapshot' => ['required', 'string', 'min:2', 'max:80'],
+            'buyer_whatsapp' => ['required', 'string', 'max:20', 'regex:/^62[2-8][0-9]{7,12}$/'],
+            'buyer_email_snapshot' => ['nullable', 'email', 'max:255'],
+            'payment_status' => ['required', 'string', Rule::in(Order::PAYMENT_STATUSES)],
+        ], [
+            'quantity.min' => 'Jumlah minimal 1.',
+            'quantity.max' => 'Maksimal '.Order::MAX_QUANTITY.' pcs per pesanan.',
+            'unit_price_snapshot.min' => 'Harga satuan minimal Rp1.000.',
+            'unit_price_snapshot.max' => 'Harga satuan maksimal Rp100.000.000.',
+            'buyer_name_snapshot.required' => 'Nama pemesan wajib diisi.',
+            'buyer_name_snapshot.min' => 'Nama minimal 2 karakter.',
+            'buyer_whatsapp.required' => 'Nomor WhatsApp wajib diisi.',
+            'buyer_whatsapp.regex' => 'Nomor WhatsApp tidak valid. Gunakan nomor Indonesia, contoh 081234567890.',
+            'buyer_email_snapshot.email' => 'Format email tidak valid.',
+            'payment_status.required' => 'Status pembayaran wajib dipilih.',
+            'payment_status.in' => 'Status pembayaran tidak dikenal.',
+        ], [
+            'quantity' => 'jumlah',
+            'unit_price_snapshot' => 'harga satuan',
+            'buyer_name_snapshot' => 'nama pemesan',
+            'buyer_whatsapp' => 'nomor WhatsApp',
+            'buyer_email_snapshot' => 'email',
+            'payment_status' => 'status pembayaran',
+        ]);
+
+        $payment = strtoupper($data['payment_status']);
+
+        // Pesanan yang sudah naik status berarti uangnya sudah diterima, jadi
+        // status bayarnya tidak boleh ditarik kembali jadi "belum lunas".
+        if ($payment === Order::PAYMENT_PENDING && $order->order_status !== Order::STATUS_PENDING) {
+            return $back->with('error', sprintf(
+                'Pesanan berstatus "%s" tidak bisa dikembalikan jadi belum lunas.',
+                $order->status_label
+            ));
+        }
+
+        $order->quantity = (int) $data['quantity'];
+        $order->unit_price_snapshot = (int) $data['unit_price_snapshot'];
+        $order->buyer_name_snapshot = $data['buyer_name_snapshot'];
+        $order->buyer_whatsapp_snapshot = $data['buyer_whatsapp'];
+        $order->buyer_email_snapshot = $data['buyer_email_snapshot'] ?? null;
+        $order->payment_status = $payment;
+        $order->paid_at = $payment === Order::PAYMENT_PAID ? ($order->paid_at ?? now()) : null;
+        $order->save();
+
+        return $back->with('success', sprintf(
+            'Pesanan %s diperbarui. Totalnya sekarang %s (%s).',
+            $order->order_code,
+            $order->formatted_total,
+            $order->payment_label
+        ));
+    }
+
+    /**
+     * Hapus pesanan — khusus penjual, untuk pesanan uji atau duplikat.
+     *
+     * Produknya tidak ikut terhapus. Justru sebaliknya: menghapus pesanan bisa
+     * membuka kunci produk yang tadinya tidak bisa dihapus karena sudah dipesan
+     * (FK product_id memakai ON DELETE RESTRICT).
+     */
+    public function destroy(Order $order): RedirectResponse
+    {
+        $code = $order->order_code;
+        $wasDone = $order->order_status === Order::STATUS_DONE;
+        $product = $order->product_name_snapshot;
+
+        $order->delete();
+
+        $message = 'Pesanan '.$code.' ('.$product.') dihapus.';
+        if ($wasDone) {
+            $message .= ' Testimoninya ikut hilang dari halaman testimoni.';
+        }
+
+        return redirect()->route('order-list')->with('success', $message);
     }
 }

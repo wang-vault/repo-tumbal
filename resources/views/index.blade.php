@@ -21,6 +21,22 @@
                     <a href="{{ route('about') }}" class="btn-secondary">Cara Bayar →</a>
                 </div>
 
+                {{-- Pencarian cepat dari beranda: form GET ke katalog, jadi hasilnya
+                     bisa di-bookmark dan tetap jalan tanpa JavaScript. --}}
+                <form action="{{ route('product-list') }}" method="get" class="hero-search" role="search">
+                    <label for="hero-q" class="hero-search-label">Cari di katalog</label>
+                    <div class="search-bar">
+                        <input type="search" id="hero-q" name="q" class="input search-bar-input"
+                               placeholder="Ketik nama barang, misalnya kaos atau stiker…"
+                               aria-label="Kata kunci pencarian produk">
+                        <button type="submit" class="btn-primary">Cari</button>
+                    </div>
+                    <p class="hint">
+                        Mencari nama dan deskripsi produk yang sedang aktif.
+                        <a href="{{ route('product-list') }}" class="paper-link">Lihat semua produk →</a>
+                    </p>
+                </form>
+
                 <div class="hero-facts" aria-label="Keunggulan toko">
                     <div class="hero-fact">
                         <strong>Manual</strong>

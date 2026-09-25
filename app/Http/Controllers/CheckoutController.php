@@ -34,7 +34,7 @@ class CheckoutController extends Controller
         // Nomor dinormalkan lebih dulu (0812… -> 62812…) supaya aturan regex-nya
         // memeriksa bentuk akhirnya, meniru normalizeWhatsapp() milik Anubis.
         $request->merge([
-            'buyer_whatsapp' => $this->normalizeWhatsapp($request->string('buyer_whatsapp')->toString()),
+            'buyer_whatsapp' => Order::normalizeWhatsapp($request->string('buyer_whatsapp')->toString()),
         ]);
 
         $data = $request->validate([
@@ -87,27 +87,5 @@ class CheckoutController extends Controller
     private function ensureIsOrderable(Product $product): void
     {
         abort_unless($product->is_active, 404, 'Produk ini sedang tidak dijual.');
-    }
-
-    /**
-     * Port dari normalizeWhatsapp() di src/lib/phone.ts milik Anubis:
-     * buang semua non-digit, ubah awalan 0 / tanpa awalan jadi 62, lalu
-     * periksa rentang realistis nomor Indonesia. Mengembalikan '' kalau tidak sah.
-     */
-    private function normalizeWhatsapp(string $raw): string
-    {
-        $digits = (string) preg_replace('/\D/', '', $raw);
-
-        if (strlen($digits) < 9) {
-            return '';
-        }
-
-        $candidate = match (true) {
-            str_starts_with($digits, '62') => $digits,
-            str_starts_with($digits, '0') => '62'.substr($digits, 1),
-            default => '62'.$digits,
-        };
-
-        return preg_match('/^62[2-8][0-9]{7,12}$/', $candidate) === 1 ? $candidate : '';
     }
 }

@@ -1,3 +1,14 @@
+@php
+    use App\Models\Order;
+
+    $badge = [
+        Order::STATUS_PENDING => 'badge-wait',
+        Order::STATUS_PAID => 'badge-paid',
+        Order::STATUS_PROCESSING => 'badge-work',
+        Order::STATUS_DONE => 'badge-done',
+    ];
+@endphp
+
 <x-layouts.app title="Kelola Pesanan">
     <div class="container-x stack">
 
@@ -9,17 +20,34 @@
                 periksa mutasi rekening dulu, baru naikkan statusnya.
             </p>
 
-            {{-- Saring berdasarkan status; jumlahnya diambil dari satu query group. --}}
+            {{-- Dua saringan bisa dipakai bersamaan: alur status dan status bayar.
+                 Jumlahnya diambil dari query group, bukan dari halaman aktif. --}}
             <div class="filter-row">
-                <a href="{{ route('order-list') }}"
+                <span class="filter-label">Status</span>
+                <a href="{{ route('order-list', ['payment' => $payment ?: null]) }}"
                    class="filter-chip {{ $status === '' ? 'is-active' : '' }}">
                     Semua <span class="filter-count">{{ $total }}</span>
                 </a>
-                @foreach (\App\Models\Order::FLOW as $tahap)
-                    <a href="{{ route('order-list', ['status' => $tahap]) }}"
+                @foreach (Order::FLOW as $tahap)
+                    <a href="{{ route('order-list', ['status' => $tahap, 'payment' => $payment ?: null]) }}"
                        class="filter-chip {{ $status === $tahap ? 'is-active' : '' }}">
-                        {{ \App\Models\Order::LABELS[$tahap] }}
+                        {{ Order::LABELS[$tahap] }}
                         <span class="filter-count">{{ $counts[$tahap] ?? 0 }}</span>
+                    </a>
+                @endforeach
+            </div>
+
+            <div class="filter-row">
+                <span class="filter-label">Pembayaran</span>
+                <a href="{{ route('order-list', ['status' => $status ?: null]) }}"
+                   class="filter-chip {{ $payment === '' ? 'is-active' : '' }}">
+                    Semua <span class="filter-count">{{ $total }}</span>
+                </a>
+                @foreach (Order::PAYMENT_STATUSES as $bayar)
+                    <a href="{{ route('order-list', ['status' => $status ?: null, 'payment' => $bayar]) }}"
+                       class="filter-chip {{ $payment === $bayar ? 'is-active' : '' }}">
+                        {{ Order::PAYMENT_LABELS[$bayar] }}
+                        <span class="filter-count">{{ $paymentCounts[$bayar] ?? 0 }}</span>
                     </a>
                 @endforeach
             </div>
@@ -35,6 +63,7 @@
                         <th>Pembeli</th>
                         <th>Jumlah</th>
                         <th>Total</th>
+                        <th>Bayar</th>
                         <th>Status</th>
                         <th>Aksi</th>
                     </tr>
@@ -52,12 +81,12 @@
                             <td>{{ $order->quantity }} pcs</td>
                             <td class="col-price">{{ $order->formatted_total }}</td>
                             <td>
-                                <span class="badge {{ [
-                                    'PENDING' => 'badge-wait',
-                                    'PAID' => 'badge-paid',
-                                    'PROCESSING' => 'badge-work',
-                                    'DONE' => 'badge-done',
-                                ][$order->order_status] ?? 'badge-wait' }}">
+                                <span class="badge {{ $order->isPaid() ? 'badge-paid' : 'badge-wait' }}">
+                                    {{ $order->payment_label }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge {{ $badge[$order->order_status] ?? 'badge-wait' }}">
                                     {{ $order->status_label }}
                                 </span>
                                 @if ($order->isAwaitingReview())
@@ -67,18 +96,27 @@
                             <td>
                                 <div class="row-actions">
                                     <a href="{{ route('order-show', $order->order_code) }}">Buka</a>
-                                    @if ($order->product)
-                                        <span class="sep">|</span>
-                                        <a href="{{ route('product-show', $order->product) }}">Produk</a>
-                                    @endif
+                                    <span class="sep">|</span>
+                                    <a href="{{ route('order-edit', $order->order_code) }}">Ubah</a>
+                                    <span class="sep">|</span>
+                                    <form action="{{ route('order-destroy', $order->order_code) }}" method="post" class="inline-form">
+                                        @csrf
+                                        @method('delete')
+                                        {{-- @js() menghasilkan string JS berkutip tunggal, jadi atributnya berkutip ganda. --}}
+                                        <button type="submit" class="link-danger"
+                                                onclick="return confirm(@js("Hapus pesanan {$order->order_code}?"))">Hapus</button>
+                                    </form>
                                 </div>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="table-empty">
-                                @if ($status !== '')
-                                    Belum ada pesanan berstatus {{ \App\Models\Order::LABELS[$status] ?? $status }}.
+                            <td colspan="9" class="table-empty">
+                                @if ($status !== '' || $payment !== '')
+                                    Tidak ada pesanan dengan saringan
+                                    {{ $status !== '' ? 'status "'.(Order::LABELS[$status] ?? $status).'"' : '' }}
+                                    {{ $status !== '' && $payment !== '' ? 'dan' : '' }}
+                                    {{ $payment !== '' ? 'pembayaran "'.(Order::PAYMENT_LABELS[$payment] ?? $payment).'"' : '' }}.
                                     <a href="{{ route('order-list') }}">Lihat semua pesanan</a>.
                                 @else
                                     Belum ada pesanan yang masuk.

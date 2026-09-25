@@ -55,6 +55,30 @@ class Order extends Model
         self::STATUS_DONE => 'Selesai',
     ];
 
+    /**
+     * Status pembayaran. Anubis punya PENDING/PAID/FAILED/EXPIRED; port ini hanya
+     * memakai dua keadaan karena tidak ada gerbang pembayaran maupun tenggat bayar.
+     */
+    public const PAYMENT_PENDING = 'PENDING';
+
+    public const PAYMENT_PAID = 'PAID';
+
+    /**
+     * Pilihan status bayar yang boleh dipilih penjual.
+     *
+     * @var list<string>
+     */
+    public const PAYMENT_STATUSES = [
+        self::PAYMENT_PENDING,
+        self::PAYMENT_PAID,
+    ];
+
+    /** Label Indonesia untuk badge status bayar. */
+    public const PAYMENT_LABELS = [
+        self::PAYMENT_PENDING => 'Belum lunas',
+        self::PAYMENT_PAID => 'Lunas',
+    ];
+
     /** Batas jumlah per pesanan (aturan checkout Anubis). */
     public const MAX_QUANTITY = 20;
 
@@ -101,6 +125,18 @@ class Order extends Model
         ];
     }
 
+    /**
+     * Total selalu turunan dari harga satuan x jumlah, dihitung ulang tiap kali
+     * pesanan disimpan. Checkout, seeder, factory, dan form ubah pesanan semuanya
+     * lewat sini, jadi angka total tidak mungkin tersimpan meleset.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $order): void {
+            $order->total_amount = (int) $order->unit_price_snapshot * (int) $order->quantity;
+        });
+    }
+
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
@@ -114,6 +150,17 @@ class Order extends Model
         return $query->when(
             $status !== null && $status !== '' && in_array($status, self::TRANSITIONS, true),
             fn (Builder $inner) => $inner->where('order_status', $status)
+        );
+    }
+
+    /**
+     * Saring daftar pesanan berdasarkan status pembayaran; null/'' berarti semua.
+     */
+    public function scopePayment(Builder $query, ?string $status): Builder
+    {
+        return $query->when(
+            $status !== null && $status !== '' && in_array($status, self::PAYMENT_STATUSES, true),
+            fn (Builder $inner) => $inner->where('payment_status', $status)
         );
     }
 
@@ -145,6 +192,11 @@ class Order extends Model
         return self::LABELS[$this->order_status] ?? $this->order_status;
     }
 
+    public function getPaymentLabelAttribute(): string
+    {
+        return self::PAYMENT_LABELS[$this->payment_status] ?? $this->payment_status;
+    }
+
     public function getFormattedUnitPriceAttribute(): string
     {
         return 'Rp'.number_format($this->unit_price_snapshot, 0, ',', '.');
@@ -161,6 +213,14 @@ class Order extends Model
     public function isClaimed(): bool
     {
         return $this->manual_claim_at !== null;
+    }
+
+    /**
+     * Sudah lunas menurut status pembayaran (bukan menurut alur status pesanan).
+     */
+    public function isPaid(): bool
+    {
+        return $this->payment_status === self::PAYMENT_PAID;
     }
 
     /**
@@ -219,6 +279,28 @@ class Order extends Model
      * Port dari src/lib/order-code.ts milik Anubis — tanggal memakai zona WIB
      * (Asia/Jakarta) dan 6 karakter acak dari alfabet tanpa 0/O/1/I/L.
      */
+    /**
+     * Port dari normalizeWhatsapp() di src/lib/phone.ts milik Anubis: buang semua
+     * non-digit, ubah awalan 0 / tanpa awalan jadi 62, lalu periksa rentang
+     * realistis nomor Indonesia. Mengembalikan '' kalau nomornya tidak sah.
+     */
+    public static function normalizeWhatsapp(string $raw): string
+    {
+        $digits = (string) preg_replace('/\D/', '', $raw);
+
+        if (strlen($digits) < 9) {
+            return '';
+        }
+
+        $candidate = match (true) {
+            str_starts_with($digits, '62') => $digits,
+            str_starts_with($digits, '0') => '62'.substr($digits, 1),
+            default => '62'.$digits,
+        };
+
+        return preg_match('/^62[2-8][0-9]{7,12}$/', $candidate) === 1 ? $candidate : '';
+    }
+
     public static function generateCode(?Carbon $now = null): string
     {
         $date = ($now ?? now())->copy()->setTimezone('Asia/Jakarta')->format('Ymd');

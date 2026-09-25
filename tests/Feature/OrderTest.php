@@ -339,4 +339,205 @@ class OrderTest extends TestCase
             $this->assertSame($order->unit_price_snapshot * $order->quantity, $order->total_amount);
         }
     }
+    /* -------------------------------------------------------------------- *
+     * Ubah & hapus pesanan (sisi penjual) + status pembayaran              *
+     * -------------------------------------------------------------------- */
+
+    public function test_penjual_bisa_membuka_form_ubah_pesanan(): void
+    {
+        $order = Order::factory()->create();
+
+        // Tamu dipantulkan ke halaman masuk.
+        $this->get(route('order-edit', $order->order_code))->assertRedirect(route('login'));
+
+        $this->actingAs($this->seller())
+            ->get(route('order-edit', $order->order_code))
+            ->assertOk()
+            ->assertSee('Ubah Pesanan')
+            ->assertSee($order->order_code)
+            ->assertSee('name="payment_status"', false)
+            ->assertSee('name="unit_price_snapshot"', false);
+    }
+
+    public function test_penjual_bisa_memperbarui_jumlah_dan_harga_pesanan(): void
+    {
+        $order = Order::factory()->create([
+            'quantity' => 2,
+            'unit_price_snapshot' => 50000,
+        ]);
+
+        $this->actingAs($this->seller())
+            ->put(route('order-update', $order->order_code), [
+                'quantity' => 5,
+                'unit_price_snapshot' => 45000,
+                'buyer_name_snapshot' => $order->buyer_name_snapshot,
+                'buyer_whatsapp' => $order->buyer_whatsapp_snapshot,
+                'payment_status' => Order::PAYMENT_PENDING,
+            ])
+            ->assertRedirect(route('order-show', $order->order_code))
+            ->assertSessionHas('success');
+
+        $order->refresh();
+        $this->assertSame(5, $order->quantity);
+        $this->assertSame(45000, $order->unit_price_snapshot);
+        // Total tidak dikirim dari form: dihitung ulang oleh model.
+        $this->assertSame(225000, $order->total_amount);
+    }
+
+    public function test_total_selalu_dihitung_ulang_oleh_model(): void
+    {
+        $order = Order::factory()->create(['quantity' => 3, 'unit_price_snapshot' => 20000]);
+
+        $order->total_amount = 999;   // angka ngawur, sengaja
+        $order->save();
+
+        $this->assertSame(60000, $order->fresh()->total_amount);
+    }
+
+    public function test_ubah_pesanan_menolak_data_tidak_sah(): void
+    {
+        $order = Order::factory()->create();
+
+        $this->actingAs($this->seller())
+            ->put(route('order-update', $order->order_code), [
+                'quantity' => 0,
+                'unit_price_snapshot' => 500,
+                'buyer_name_snapshot' => 'X',
+                'buyer_whatsapp' => '12345',
+                'payment_status' => 'LUNAS',
+            ])
+            ->assertSessionHasErrors([
+                'quantity', 'unit_price_snapshot', 'buyer_name_snapshot',
+                'buyer_whatsapp', 'payment_status',
+            ]);
+
+        // Tidak ada yang berubah di database.
+        $this->assertDatabaseHas('orders', [
+            'order_code' => $order->order_code,
+            'quantity' => $order->quantity,
+            'unit_price_snapshot' => $order->unit_price_snapshot,
+        ]);
+    }
+
+    public function test_nomor_whatsapp_dinormalkan_juga_saat_pesanan_disunting(): void
+    {
+        $order = Order::factory()->create();
+
+        $this->actingAs($this->seller())->put(route('order-update', $order->order_code), [
+            'quantity' => $order->quantity,
+            'unit_price_snapshot' => $order->unit_price_snapshot,
+            'buyer_name_snapshot' => $order->buyer_name_snapshot,
+            'buyer_whatsapp' => '0813-2244-5566',
+            'payment_status' => $order->payment_status,
+        ])->assertRedirect();
+
+        $this->assertSame('6281322445566', $order->fresh()->buyer_whatsapp_snapshot);
+    }
+
+    public function test_penjual_bisa_menandai_pembayaran_lunas(): void
+    {
+        $order = Order::factory()->create();
+        $this->assertNull($order->paid_at);
+        $this->assertFalse($order->isPaid());
+
+        $this->actingAs($this->seller())->put(route('order-update', $order->order_code), [
+            'quantity' => $order->quantity,
+            'unit_price_snapshot' => $order->unit_price_snapshot,
+            'buyer_name_snapshot' => $order->buyer_name_snapshot,
+            'buyer_whatsapp' => $order->buyer_whatsapp_snapshot,
+            'payment_status' => Order::PAYMENT_PAID,
+        ])->assertRedirect(route('order-show', $order->order_code));
+
+        $order->refresh();
+        $this->assertSame(Order::PAYMENT_PAID, $order->payment_status);
+        $this->assertNotNull($order->paid_at);
+        $this->assertTrue($order->isPaid());
+        $this->assertSame('Lunas', $order->payment_label);
+        // Alur status pesanan tidak ikut berubah — itu urusan tombol status.
+        $this->assertSame(Order::STATUS_PENDING, $order->order_status);
+    }
+
+    public function test_pembayaran_tidak_bisa_dibatalkan_setelah_pesanan_naik_status(): void
+    {
+        $order = Order::factory()->processing()->create();
+
+        $this->actingAs($this->seller())->put(route('order-update', $order->order_code), [
+            'quantity' => $order->quantity,
+            'unit_price_snapshot' => $order->unit_price_snapshot,
+            'buyer_name_snapshot' => $order->buyer_name_snapshot,
+            'buyer_whatsapp' => $order->buyer_whatsapp_snapshot,
+            'payment_status' => Order::PAYMENT_PENDING,
+        ])->assertRedirect(route('order-show', $order->order_code))
+            ->assertSessionHas('error');
+
+        $segar = $order->fresh();
+        $this->assertSame(Order::PAYMENT_PAID, $segar->payment_status);
+        $this->assertNotNull($segar->paid_at);
+    }
+
+    public function test_daftar_pesanan_bisa_disaring_berdasarkan_pembayaran(): void
+    {
+        $lunas = Order::factory()->paid()->create();
+        $belum = Order::factory()->create();
+        $seller = $this->seller();
+
+        $this->actingAs($seller)->get(route('order-list', ['payment' => Order::PAYMENT_PAID]))
+            ->assertOk()
+            ->assertSee($lunas->order_code)
+            ->assertDontSee($belum->order_code)
+            ->assertSee('Lunas');
+
+        $this->actingAs($seller)->get(route('order-list', ['payment' => Order::PAYMENT_PENDING]))
+            ->assertOk()
+            ->assertSee($belum->order_code)
+            ->assertDontSee($lunas->order_code);
+
+        // Dua saringan sekaligus: sudah lunas dan sudah naik ke PAID.
+        $this->actingAs($seller)->get(route('order-list', [
+            'status' => Order::STATUS_PAID,
+            'payment' => Order::PAYMENT_PAID,
+        ]))->assertOk()->assertSee($lunas->order_code);
+    }
+
+    public function test_penjual_bisa_menghapus_pesanan(): void
+    {
+        $order = Order::factory()->create();
+        $productId = $order->product_id;
+
+        $this->actingAs($this->seller())
+            ->delete(route('order-destroy', $order->order_code))
+            ->assertRedirect(route('order-list'))
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseMissing('orders', ['order_code' => $order->order_code]);
+        // Produknya tidak ikut terhapus.
+        $this->assertDatabaseHas('products', ['id' => $productId]);
+    }
+
+    public function test_menghapus_pesanan_membuka_kunci_hapus_produk(): void
+    {
+        $order = Order::factory()->create();
+        $product = $order->product;
+        $seller = $this->seller();
+
+        // Selama masih ada pesanan, produk ditahan (FK ON DELETE RESTRICT).
+        $this->actingAs($seller)->delete(route('product-destroy', $product))->assertSessionHas('error');
+        $this->assertDatabaseHas('products', ['id' => $product->id]);
+
+        // Begitu pesanannya dihapus, produknya boleh dihapus.
+        $this->actingAs($seller)->delete(route('order-destroy', $order->order_code));
+        $this->actingAs($seller)->delete(route('product-destroy', $product))->assertSessionHas('success');
+        $this->assertDatabaseMissing('products', ['id' => $product->id]);
+    }
+
+    public function test_tamu_tidak_bisa_mengubah_atau_menghapus_pesanan(): void
+    {
+        $order = Order::factory()->create();
+
+        $this->get(route('order-edit', $order->order_code))->assertRedirect(route('login'));
+        $this->put(route('order-update', $order->order_code), [])->assertRedirect(route('login'));
+        $this->delete(route('order-destroy', $order->order_code))->assertRedirect(route('login'));
+
+        $this->assertDatabaseHas('orders', ['order_code' => $order->order_code]);
+    }
 }

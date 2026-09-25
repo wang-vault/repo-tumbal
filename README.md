@@ -22,13 +22,13 @@ controller/model/migration/factory/seeder untuk tiap entitas (di contoh: `Studen
 
 | Bagian | Isi |
 |---|---|
-| Beranda `/` | Hero "Belanja gampang, *kabar* pembayaran datang cepat", 3 langkah cara kerja, teaser downloader, 6 produk terbaru |
+| Beranda `/` | Hero "Belanja gampang, *kabar* pembayaran datang cepat", **kotak pencarian produk**, 3 langkah cara kerja, teaser downloader, 6 produk terbaru |
 | Katalog `/products` | Daftar semua produk + pencarian `?q=...` (form GET, jalan tanpa JavaScript) + pagination 12 baris per halaman |
 | CRUD produk | Tambah, lihat detail, ubah, hapus — dengan validasi & pesan flash |
 | Checkout `/checkout/{id}` | Form untuk tamu (tanpa daftar akun): nama, WhatsApp, jumlah — nama & harga produk **difoto** (snapshot) ke pesanan |
 | Pesanan `/orders/{kode}` | Kode `ORD-YYYYMMDD-XXXXXX`, halaman rincian terbuka lewat kodenya, alur status `PENDING → PAID → PROCESSING → DONE` |
 | Klaim transfer | Pembeli menandai "sudah transfer" (+ nomor referensi & catatan); status **tetap** `PENDING` sampai penjual menyetujui |
-| Kelola pesanan `/orders` | Khusus penjual: daftar semua pesanan + filter status (`?status=PAID`) |
+| Kelola pesanan `/orders` | Khusus penjual: daftar semua pesanan, dua saringan (`?status=PAID`, `?payment=PENDING`), ubah, dan hapus pesanan |
 | Testimoni `/testimoni` | Otomatis dari pesanan `DONE` (maks 20 terbaru), nama pembeli dipendekkan jadi "Budi S.", tanpa nomor WA/kode/total |
 | Tentang `/about` | Penjelasan alur transfer manual via WhatsApp |
 | Downloader `/downloader` | Halaman statis 3 platform (TikTok, YouTube, Instagram) |
@@ -37,7 +37,7 @@ controller/model/migration/factory/seeder untuk tiap entitas (di contoh: `Studen
 | Batas tulis | `throttle:product-write` 20/menit/penjual, `order-create` 10/menit/IP, `order-claim` 5/menit/IP, `order-status` 30/menit/penjual — lebih dari itu muncul halaman 429 |
 | Halaman error | 403, 404, 419, 429, 500 memakai tata letak yang sama (`resources/views/errors/`), bukan halaman bawaan Laravel |
 | CI | `.github/workflows/ci.yml` — matrix PHP 8.2/8.3/8.4 (install, `.env`, migrasi+seed, kompilasi Blade, `route:list`, `php artisan test`) + job `pint --test` |
-| Test | 53 pengujian: `AuthTest` (13 — login & hak akses), `ProductTest` (15 — katalog, CRUD, pagination, halaman error, throttle), `OrderTest` (18 — checkout, kode pesanan, snapshot, klaim, alur status), `TestimonialTest` (5 — privasi & batas 20), `ExampleTest` bawaan skeleton (2 — feature + unit) |
+| Test | 65 pengujian: `AuthTest` (13 — login & hak akses), `ProductTest` (16 — katalog, CRUD, pagination, pencarian, halaman error, throttle), `OrderTest` (29 — checkout, kode pesanan, snapshot, klaim, alur status, ubah & hapus pesanan, status pembayaran), `TestimonialTest` (5 — privasi & batas 20), `ExampleTest` bawaan skeleton (2 — feature + unit) |
 
 **Tidak perlu `npm install` / `npm run build`.** Layout memakai `<link rel="stylesheet">` ke CSS
 statis, bukan `@vite`, jadi `php artisan serve` langsung menampilkan tampilan lengkap. (Vite +
@@ -54,7 +54,7 @@ tulis milik penjual.
 | Siapa | Boleh |
 |---|---|
 | Tamu / pembeli | `/`, `/about`, `/downloader`, `/testimoni`, `/products` (hanya produk **aktif**), `/products/{id}`, `/checkout/{id}` (GET + POST), `/orders/{kode}` (rincian pesanan lewat kodenya), `POST /orders/{kode}/claim` |
-| Penjual (sudah masuk) | semua di atas + `/products/create`, `POST /products`, `/products/{id}/edit`, `PUT`, `DELETE`, melihat produk nonaktif di daftar kelola, `/orders` (semua pesanan), `POST /orders/{kode}/status`, `POST /orders/{kode}/reject-claim` |
+| Penjual (sudah masuk) | semua di atas + `/products/create`, `POST /products`, `/products/{id}/edit`, `PUT`, `DELETE`, melihat produk nonaktif di daftar kelola, `/orders` (semua pesanan), `POST /orders/{kode}/status`, `POST /orders/{kode}/reject-claim`, `/orders/{kode}/edit`, `PUT /orders/{kode}`, `DELETE /orders/{kode}` |
 
 > Pembeli **tidak punya akun**. Kode pesanan `ORD-YYYYMMDD-XXXXXX` merangkap jadi alamat dan
 > kunci akses: siapa pun yang memegang kode itu bisa membuka dan mengklaim pesanannya — sama
@@ -117,7 +117,7 @@ php artisan serve                      # http://127.0.0.1:8000
 Menjalankan test:
 
 ```bash
-php artisan test                       # semua test (53)
+php artisan test                       # semua test (65)
 php artisan test --filter=AuthTest         # khusus login & hak akses
 php artisan test --filter=ProductTest      # khusus produk
 php artisan test --filter=OrderTest        # khusus checkout, klaim, alur status
@@ -129,6 +129,13 @@ Login di browser: buka <http://127.0.0.1:8000/login> dengan `admin@anubis.test` 
 Mencoba alur pesan tanpa login: buka salah satu produk → **Pesan Produk Ini** → isi form →
 simpan kodenya (`ORD-…`) → di halaman rincian klik **Saya sudah transfer** → masuk sebagai
 penjual → buka `/orders` → setujui klaimnya sampai status `DONE` → lihat hasilnya di `/testimoni`.
+
+> Tidak punya PHP/Composer di mesin yang dipakai? Direktori `preview-kit/` berisi perkakas untuk menjalankan
+> aplikasi lewat **PHP-WASM**: `bash preview-kit/setup.sh --demo` (mengunduh PHP-WASM lewat npm,
+> 111 paket vendor dari GitHub, merakit autoloader, migrasi + seed) lalu
+> `APP_ROOT=/tmp/verify/app PORT=8080 node preview-kit/server.mjs`. Test juga bisa dijalankan
+> dengan `bash preview-kit/run-tests.sh`. Semua ini perkakas sandbox — di mesin biasa cukup
+> `composer install` + `php artisan serve` + `php artisan test`.
 
 ## CI & gaya kode
 
@@ -175,6 +182,9 @@ Seluruh repo ini berlisensi **MIT** (berkas `LICENSE`).
 | GET | `/orders` | `order-list` | `web, auth` | `OrderController@index` |
 | POST | `/orders/{order:order_code}/status` | `order-status` | `web, auth, throttle:order-status` | `OrderController@updateStatus` |
 | POST | `/orders/{order:order_code}/reject-claim` | `order-claim-reject` | `web, auth, throttle:order-status` | `OrderController@rejectClaim` |
+| GET | `/orders/{order:order_code}/edit` | `order-edit` | `web, auth` | `OrderController@edit` |
+| PUT | `/orders/{order:order_code}` | `order-update` | `web, auth, throttle:order-status` | `OrderController@update` |
+| DELETE | `/orders/{order:order_code}` | `order-destroy` | `web, auth, throttle:order-status` | `OrderController@destroy` |
 | GET | `/up` | — | — | health check bawaan Laravel |
 
 Urutan pendaftaran di `routes/web.php` penting: `/products/create` dan
@@ -195,7 +205,7 @@ yang dibatasi hanya aksi menulis. Semua limiter didefinisikan di
 | `product-write` | 20/menit | penjual | tambah/ubah/hapus produk |
 | `order-create` | 10/menit | IP | `POST /checkout/{product}` (tamu, tanpa akun) |
 | `order-claim` | 5/menit | IP | `POST /orders/{kode}/claim` (tamu) |
-| `order-status` | 30/menit | penjual | ubah status & tolak klaim |
+| `order-status` | 30/menit | penjual | ubah status, tolak klaim, ubah & hapus pesanan |
 
 ## Skema `products`
 
@@ -225,9 +235,9 @@ Meniru tabel `orders` milik Anubis (`supabase/store/001_schema.sql`), dipangkas 
 | `product_name_snapshot` | string | nama produk **saat dipesan** |
 | `unit_price_snapshot` | unsigned bigint | harga satuan saat dipesan (Rupiah penuh) |
 | `quantity` | unsigned smallint | 1-20 per pesanan |
-| `total_amount` | unsigned bigint | `unit_price_snapshot × quantity` |
+| `total_amount` | unsigned bigint | `unit_price_snapshot × quantity` — dihitung ulang otomatis oleh model setiap pesanan disimpan |
 | `payment_method` | string | selalu `MANUAL` di port ini |
-| `payment_status` | string | `PENDING` \| `PAID` |
+| `payment_status` | string | `PENDING` \| `PAID` — penjual bisa mengubahnya lewat form ubah pesanan; tidak bisa ditarik mundur kalau pesanan sudah naik status |
 | `order_status` | string | `PENDING` \| `PAID` \| `PROCESSING` \| `DONE` |
 | `manual_claim_at` / `_note` / `_reference` | timestamp / text / string | isian pembeli saat menandai "sudah transfer" |
 | `manual_reviewed_at` / `_status` / `_note` | timestamp / string / text | keputusan penjual: `APPROVED` \| `REJECTED` + catatannya |
@@ -259,6 +269,10 @@ Index `[order_status, created_at]` untuk daftar kelola + filter status.
 4. Penjual menaikkan `PAID → PROCESSING → DONE`. Lompatan (`PENDING → DONE`) dan langkah mundur
    ditolak `Order::canTransitionTo()` dengan pesan flash.
 5. Pesanan `DONE` otomatis muncul sebagai testimoni di `/testimoni` (maks 20 terbaru).
+6. Penjual juga bisa **mengubah** pesanan lewat `/orders/{kode}/edit` (jumlah, harga satuan, data
+   pembeli, dan status pembayaran — total selalu dihitung ulang oleh model) serta **menghapusnya**
+   kalau itu pesanan uji atau duplikat. Menghapus pesanan sekaligus membuka kunci produk yang
+   tadinya tidak bisa dihapus karena sudah pernah dipesan.
 
 Testimoni hanya membaca 4 kolom aman: `product_name_snapshot`, `quantity`, nama pembeli yang
 dipendekkan (`Order::maskBuyerName()` — "Budi Santoso" → "Budi S.", "Rizky" → "R***y"), dan
@@ -297,7 +311,8 @@ resources/views/products/edit.blade.php
 resources/views/products/show.blade.php
 resources/views/checkout.blade.php              form pesan untuk pembeli (tanpa perlu akun)
 resources/views/orders/show.blade.php           rincian pesanan + garis waktu status + form klaim/verifikasi
-resources/views/orders/index.blade.php          daftar kelola pesanan + chip filter status
+resources/views/orders/index.blade.php          daftar kelola + saringan status & pembayaran + ubah/hapus
+resources/views/orders/edit.blade.php           form ubah pesanan + zona hapus
 resources/views/testimoni.blade.php             kartu testimoni dari pesanan selesai
 resources/views/products/partials/form.blade.php form bersama create/edit
 resources/views/partials/pagination.blade.php   tampilan pagination sendiri (bukan class Tailwind)
@@ -315,6 +330,7 @@ tests/Feature/TestimonialTest.php               5 pengujian testimoni: hanya DON
 .github/workflows/ci.yml                        CI: test (PHP 8.2/8.3/8.4) + pemeriksaan gaya Pint
 pint.json                                       preset gaya kode: laravel
 LICENSE                                         MIT
+preview-kit/                                    perkakas sandbox preview (PHP-WASM) — bukan bagian aplikasi
 composer.lock                                   dari Laravel 12.68.0, content-hash cocok
 ```
 
@@ -354,7 +370,7 @@ Port ini memindahkan **etalase toko** (beranda, katalog, detail produk), **login
 |---|---|---|
 | Gerbang pembayaran | Stenly, Yobasepay, dan QRIS otomatis (`payment_id`, `payment_url`, `qr_image_url`, `payment_expired_at`, `last_payment_checked_at`) | port ini hanya jalur `MANUAL`: pembeli transfer sendiri, lalu mengklaim; penjual memverifikasi mutasi rekening |
 | Halaman `/orders/{code}/receipt` & `/pay/{code}` | struk pembayaran + halaman bayar | angka lengkapnya sudah ada di `/orders/{kode}`; dua halaman itu belum dibuat |
-| Status `EXPIRED` + tenggat bayar | pesanan kedaluwarsa sendiri kalau belum dibayar sampai `payment_expired_at` | tidak ada mekanisme tenggat di sini, jadi alurnya berhenti di `DONE` dan pesanan lama tetap `PENDING` sampai penjual menaikkannya |
+| Status `EXPIRED` / pembayaran `FAILED` + tenggat bayar | pesanan kedaluwarsa sendiri kalau belum dibayar sampai `payment_expired_at`; pembayaran juga bisa ditandai gagal | tidak ada mekanisme tenggat di sini: alur berhenti di `DONE`, status bayar hanya `PENDING`/`PAID`, dan pesanan lama tetap `PENDING` sampai penjual menaikkannya |
 | Kolom `account_id` di `orders` | pesanan tertaut ke akun pembeli (Supabase Auth) | pembeli di sini tamu, jadi `order_code` merangkap kunci akses — tidak ada akun untuk ditautkan |
 | Chat WhatsApp & notifikasi Telegram | `waMeUrl()` ke penjual, `telegram_notified_at`, `manual_notified_at` | nomor WA pembeli disimpan & dinormalkan ke `62…`, tapi tidak ada pesan keluar dari aplikasi |
 | Tabel `manual_payment_settings` | rekening/QRIS tujuan yang bisa diubah admin | di sini instruksinya teks statis: pembeli diminta menghubungi penjual lewat WhatsApp |

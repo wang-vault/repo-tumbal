@@ -35,6 +35,30 @@ class ProductTest extends TestCase
             ->assertSee('Kopi Tubruk Nusantara');
     }
 
+    public function test_beranda_punya_form_pencarian_produk(): void
+    {
+        Product::factory()->create([
+            'name' => 'Kaos Kabar Pagi',
+            'description' => 'Bahan katun adem, sablon tangan.',
+        ]);
+
+        // Kotak pencarian di hero beranda mengarah ke katalog (?q=...).
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('Cari di katalog')
+            ->assertSee('name="q"', false)
+            ->assertSee('action="'.route('product-list').'"', false);
+
+        // Dan memang menghasilkan produk yang cocok.
+        $this->get('/products?q=Kabar')
+            ->assertOk()
+            ->assertSee('Kaos Kabar Pagi');
+
+        $this->get('/products?q=sablon+tangan')
+            ->assertOk()
+            ->assertSee('Kaos Kabar Pagi');
+    }
+
     public function test_beranda_menyembunyikan_produk_nonaktif(): void
     {
         Product::factory()->inactive()->create(['name' => 'BarangArsipRahasia']);

@@ -43,7 +43,7 @@ class AppServiceProvider extends ServiceProvider
      *   product-write  20/menit per penjual  tambah, ubah, hapus produk
      *   order-create   10/menit per IP       membuat pesanan (rute publik, tanpa login)
      *   order-claim     5/menit per IP       menekan "saya sudah transfer"
-     *   order-status   30/menit per penjual  mengubah status pesanan
+     *   order-status   30/menit per penjual  aksi tulis pesanan: status, tolak klaim, ubah, hapus
      *
      * Login punya batasannya sendiri di LoginController: 5 percobaan per menit
      * untuk tiap kombinasi email + IP. Pelanggaran batas di sini menghasilkan 429

@@ -45,17 +45,21 @@ Route::middleware('throttle:order-claim')->group(function () {
 |--------------------------------------------------------------------------
 | {order:order_code} mengikat model lewat kode pesanan, bukan id, jadi alamatnya
 | tidak bisa ditebak berurutan. `/orders` (daftar kelola) tidak bentrok dengan
-| `/orders/{order}` karena jumlah segmennya berbeda.
+| `/orders/{order}` maupun `/orders/{order}/edit` karena jumlah segmennya beda.
 */
 
 Route::get('/orders/{order:order_code}', [OrderController::class, 'show'])->name('order-show');
 
 Route::middleware('auth')->group(function () {
     Route::get('/orders', [OrderController::class, 'index'])->name('order-list');
+    Route::get('/orders/{order:order_code}/edit', [OrderController::class, 'edit'])->name('order-edit');
 
+    // Semua aksi tulis penjual di sini memakai satu limiter yang sama.
     Route::middleware('throttle:order-status')->group(function () {
         Route::post('/orders/{order:order_code}/status', [OrderController::class, 'updateStatus'])->name('order-status');
         Route::post('/orders/{order:order_code}/reject-claim', [OrderController::class, 'rejectClaim'])->name('order-claim-reject');
+        Route::put('/orders/{order:order_code}', [OrderController::class, 'update'])->name('order-update');
+        Route::delete('/orders/{order:order_code}', [OrderController::class, 'destroy'])->name('order-destroy');
     });
 });
 
