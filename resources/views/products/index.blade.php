@@ -90,6 +90,11 @@
                             <td colspan="@auth 5 @else 4 @endauth" class="table-empty">
                                 @if ($search !== '')
                                     Tidak ada produk yang cocok dengan "{{ $search }}".
+                                @elseif ($products->currentPage() > $products->lastPage())
+                                    {{-- Bisa terjadi kalau nomor halaman diketik tangan
+                                         (?page=99) padahal halamannya tidak sebanyak itu. --}}
+                                    Tidak ada produk di halaman ini.
+                                    <a href="{{ route('product-list') }}">Kembali ke halaman pertama</a>.
                                 @else
                                     Belum ada produk yang dijual.
                                 @endif
