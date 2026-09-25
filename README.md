@@ -20,13 +20,15 @@ controller/model/migration/factory/seeder untuk satu entitas (di contoh: `Studen
 | Bagian | Isi |
 |---|---|
 | Beranda `/` | Hero "Belanja gampang, *kabar* pembayaran datang cepat", 3 langkah cara kerja, teaser downloader, 6 produk terbaru |
-| Katalog `/products` | Daftar semua produk + pencarian `?q=...` (form GET, jalan tanpa JavaScript) |
+| Katalog `/products` | Daftar semua produk + pencarian `?q=...` (form GET, jalan tanpa JavaScript) + pagination 12 baris per halaman |
 | CRUD produk | Tambah, lihat detail, ubah, hapus — dengan validasi & pesan flash |
 | Tentang `/about` | Penjelasan alur transfer manual via WhatsApp |
 | Downloader `/downloader` | Halaman statis 3 platform (TikTok, YouTube, Instagram) |
 | Tampilan | CSS statis `public/css/anubis.css` — gaya koran: kertas hangat, tinta, aksen oxblood, sudut tajam, bayangan offset |
 | Login penjual | `POST /login` berbasis session + pembatasan 5 percobaan/menit; semua rute tulis dilindungi middleware `auth` |
-| Test | 27 pengujian: `AuthTest` (13 — login & hak akses), `ProductTest` (12 — katalog & CRUD), `ExampleTest` bawaan skeleton (2 — feature + unit) |
+| Batas tulis produk | `throttle:product-write` — 20 tambah/ubah/hapus per menit untuk tiap penjual; lebih dari itu muncul halaman 429 |
+| Halaman error | 403, 404, 419, 429, 500 memakai tata letak yang sama (`resources/views/errors/`), bukan halaman bawaan Laravel |
+| Test | 30 pengujian: `AuthTest` (13 — login & hak akses), `ProductTest` (15 — katalog, CRUD, pagination, halaman error, throttle), `ExampleTest` bawaan skeleton (2 — feature + unit) |
 
 **Tidak perlu `npm install` / `npm run build`.** Layout memakai `<link rel="stylesheet">` ke CSS
 statis, bukan `@vite`, jadi `php artisan serve` langsung menampilkan tampilan lengkap. (Vite +
@@ -120,10 +122,10 @@ Login di browser: buka <http://127.0.0.1:8000/login> dengan `admin@anubis.test` 
 | POST | `/login` | `login.store` | `web, guest` | `Auth\LoginController@store` |
 | POST | `/logout` | `logout` | `web, auth` | `Auth\LoginController@destroy` |
 | GET | `/products/create` | `product-create` | `web, auth` | `ProductController@create` |
-| POST | `/products` | `product-store` | `web, auth` | `ProductController@store` |
+| POST | `/products` | `product-store` | `web, auth, throttle:product-write` | `ProductController@store` |
 | GET | `/products/{product}/edit` | `product-edit` | `web, auth` | `ProductController@edit` |
-| PUT | `/products/{product}` | `product-update` | `web, auth` | `ProductController@update` |
-| DELETE | `/products/{product}` | `product-destroy` | `web, auth` | `ProductController@destroy` |
+| PUT | `/products/{product}` | `product-update` | `web, auth, throttle:product-write` | `ProductController@update` |
+| DELETE | `/products/{product}` | `product-destroy` | `web, auth, throttle:product-write` | `ProductController@destroy` |
 | GET | `/up` | — | — | health check bawaan Laravel |
 
 Urutan pendaftaran di `routes/web.php` penting: `/products/create` dan
@@ -131,6 +133,11 @@ Urutan pendaftaran di `routes/web.php` penting: `/products/create` dan
 kalau tidak kata `create`/`edit` ditangkap sebagai parameter `{product}`.
 
 Penamaan rute (`product-list`, `product-create`, …) sengaja meniru gaya `student-*` di repo contoh.
+
+Membuka form (`product-create`, `product-edit`) **tidak** ikut dibatasi throttle — yang dibatasi
+hanya aksi menulis, 20 kali per menit per penjual. Aturannya didefinisikan di
+`AppServiceProvider::configureRateLimiting()`; kalau dilanggar, Laravel mengirim 429 yang dirender
+`resources/views/errors/429.blade.php`.
 
 ## Skema `products`
 
@@ -155,7 +162,7 @@ Ditambahkan di atas skeleton Laravel standar:
 ```
 app/Http/Controllers/Auth/LoginController.php    login/logout + pembatasan percobaan
 app/Http/Controllers/HomeController.php          beranda, tentang, downloader
-app/Http/Controllers/ProductController.php       CRUD produk + pencarian
+app/Http/Controllers/ProductController.php       CRUD produk + pencarian + pagination 12/halaman
 app/Models/Product.php                           scope active(), formatted_price, status_label
 database/migrations/2026_09_25_000000_create_products_table.php
 database/factories/ProductFactory.php            + state inactive()
@@ -172,13 +179,21 @@ resources/views/products/create.blade.php
 resources/views/products/edit.blade.php
 resources/views/products/show.blade.php
 resources/views/products/partials/form.blade.php form bersama create/edit
+resources/views/partials/pagination.blade.php    tampilan pagination sendiri (bukan class Tailwind)
+resources/views/errors/partials/notice.blade.php kerangka bersama halaman error
+resources/views/errors/403.blade.php             akses ditolak
+resources/views/errors/404.blade.php             alamat/produk tidak ada
+resources/views/errors/419.blade.php             sesi atau token CSRF kedaluwarsa
+resources/views/errors/429.blade.php             kena batas throttle tulis produk
+resources/views/errors/500.blade.php             kesalahan server
 public/css/anubis.css                            seluruh tampilan (tanpa build step)
 tests/Feature/AuthTest.php                       13 pengujian login & hak akses
-tests/Feature/ProductTest.php                    12 pengujian katalog, CRUD, validasi, seeder
+tests/Feature/ProductTest.php                    15 pengujian katalog, CRUD, validasi, pagination, halaman error, throttle
 composer.lock                                    dari Laravel 12.68.0, content-hash cocok
 ```
 
 Diubah dari skeleton: `routes/web.php`, `bootstrap/app.php` (arah redirect `auth`/`guest`),
+`app/Providers/AppServiceProvider.php` (tampilan pagination default + limiter `product-write`),
 `.env.example` (`APP_NAME`, `APP_FAKER_LOCALE=id_ID`), `tests/Feature/ExampleTest.php`
 (pakai `RefreshDatabase`), `README.md`.
 
@@ -216,8 +231,6 @@ Port ini memindahkan **etalase toko** (beranda, katalog, detail produk) + **logi
 | Downloader yang berfungsi | benar-benar mengunduh dari YouTube/audio/Instagram/TikTok lewat 8 rute API | di sini hanya tiruan tampilan, sesuai kesepakatan awal |
 | Registrasi, lupa/reset password, verifikasi email | ada di `/auth/*` | di sini satu akun demo dari seeder: `admin@anubis.test` / `password` |
 | Tabel `profiles` | `supabase/account/001_schema.sql` | port ini memakai tabel `users` bawaan Laravel apa adanya |
-| Halaman error bergaya Anubis | `not-found.tsx` | masih memakai 404/403/500 bawaan Laravel |
-| Pagination katalog | daftar produk dipaginasi | `ProductController::index()` masih `->get()`; pencarian `?q=` sudah jalan |
 | Unggah gambar produk | unggah berkas ke storage | di sini hanya kolom `image_url`; kalau kosong, kartu produk menampilkan inisial nama |
 | Policy / banyak penjual | tiap penjual punya produknya | belum ada `Policy`/`Gate`: penjual mana pun yang masuk boleh mengubah produk mana pun |
 | CI, `LICENSE`, `lang/id` | ada workflow & berkas bahasa | belum disertakan |

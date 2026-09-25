@@ -5,14 +5,17 @@ namespace Tests\Feature;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 /**
  * Menjalankan: php artisan test --filter=ProductTest
  *
- * Rute tulis (store/update/destroy) dilindungi middleware `auth`, jadi semua
- * pengujian di bawah ini masuk dulu sebagai penjual lewat actingAs().
- * Perilaku tamu diuji terpisah di tests/Feature/AuthTest.php.
+ * Rute tulis (store/update/destroy) dilindungi middleware `auth` dan dibatasi
+ * `throttle:product-write`, jadi semua pengujian di bawah ini masuk dulu sebagai
+ * penjual lewat actingAs(). Perilaku tamu diuji terpisah di AuthTest.php.
  */
 class ProductTest extends TestCase
 {
@@ -150,7 +153,79 @@ class ProductTest extends TestCase
 
     public function test_produk_yang_tidak_ada_mengembalikan_404(): void
     {
-        $this->get('/products/9999')->assertNotFound();
+        // 404 dirender lewat resources/views/errors/404.blade.php, bukan halaman
+        // bawaan Laravel.
+        $this->get('/products/9999')
+            ->assertNotFound()
+            ->assertSee('Halaman tidak ditemukan')
+            ->assertSee('error-card', false);
+    }
+
+    public function test_alamat_tak_dikenal_menampilkan_halaman_404_bergaya(): void
+    {
+        $this->get('/alamat-yang-tidak-ada')
+            ->assertNotFound()
+            ->assertSee('Halaman tidak ditemukan')
+            ->assertSee('error-card', false);
+    }
+
+    public function test_katalog_dipaginasi_dan_nomor_baris_melanjut(): void
+    {
+        for ($i = 1; $i <= 15; $i++) {
+            Product::factory()->create([
+                'name' => sprintf('Kopi Uji %02d', $i),
+                'price' => 20000,
+            ]);
+        }
+
+        // Halaman pertama: 12 produk terbaru, nomor baris mulai dari 1.
+        $this->get(route('product-list'))
+            ->assertOk()
+            ->assertSee('Kopi Uji 15')
+            ->assertDontSee('Kopi Uji 01')
+            ->assertSee('<td>1</td>', false);
+
+        // Halaman kedua: sisanya, nomor baris melanjutkan dari 13.
+        $this->get(route('product-list', ['page' => 2]))
+            ->assertOk()
+            ->assertSee('Kopi Uji 01')
+            ->assertDontSee('Kopi Uji 15')
+            ->assertSee('<td>13</td>', false)
+            ->assertSee('Halaman 2 dari 2', false);
+
+        // Kata kunci pencarian ikut terbawa ke tautan halaman lain.
+        $this->get(route('product-list', ['q' => 'Kopi Uji', 'page' => 2]))
+            ->assertOk()
+            ->assertSee('q=Kopi', false);
+    }
+
+    public function test_rute_tulis_produk_dibatasi_throttle(): void
+    {
+        $limiter = RateLimiter::limiter('product-write');
+        $this->assertNotNull($limiter, 'Limiter product-write harus terdaftar di AppServiceProvider.');
+
+        $seller = $this->seller();
+        $limit = $limiter(Request::create('/products', 'POST')->setUserResolver(fn () => $seller));
+
+        $this->assertSame(20, $limit->maxAttempts);
+        $this->assertSame((string) $seller->id, $limit->key);
+
+        // Hanya aksi menulis yang dibatasi; membuka form dan membaca katalog tidak.
+        foreach (['product-store', 'product-update', 'product-destroy'] as $name) {
+            $this->assertContains(
+                'throttle:product-write',
+                Route::getRoutes()->getByName($name)->gatherMiddleware(),
+                "Rute {$name} seharusnya dibatasi throttle:product-write."
+            );
+        }
+
+        foreach (['product-create', 'product-edit', 'product-list'] as $name) {
+            $this->assertNotContains(
+                'throttle:product-write',
+                Route::getRoutes()->getByName($name)->gatherMiddleware(),
+                "Rute {$name} seharusnya tidak dibatasi throttle."
+            );
+        }
     }
 
     public function test_seeder_mengisi_katalog_dan_akun_penjual(): void

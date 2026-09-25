@@ -66,7 +66,11 @@
             </div>
         @endif
 
-        @if ($errors->any())
+        {{-- $errors tidak selalu tersedia: halaman error untuk alamat yang tidak
+             dikenali dirender sebelum middleware ShareErrorsFromSession sempat
+             berjalan, jadi variabelnya belum dibagi ke view. Tanpa pemeriksaan
+             ini, halaman 404 malah berubah jadi 500. --}}
+        @if (($errors ?? null)?->any())
             <div class="container-x">
                 <div class="alert-error">
                     <strong>Periksa kembali isianmu:</strong>

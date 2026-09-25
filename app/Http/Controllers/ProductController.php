@@ -10,6 +10,12 @@ use Illuminate\View\View;
 class ProductController extends Controller
 {
     /**
+     * Baris per halaman katalog. Cukup panjang untuk dibaca tanpa menggulir
+     * berlebihan, cukup pendek supaya pagination-nya benar-benar terpakai.
+     */
+    public const PER_PAGE = 12;
+
+    /**
      * Katalog + daftar kelola produk. Mendukung pencarian ?q=... (form GET,
      * tanpa JavaScript — sama seperti katalog pembeli di Anubis).
      *
@@ -28,8 +34,14 @@ class ProductController extends Controller
                         ->orWhere('description', 'like', '%'.$search.'%');
                 });
             })
+            // Produk buatan seeder bisa punya created_at yang sama persis, jadi
+            // id ikut diurutkan sebagai pemecah seri — tanpa ini baris yang sama
+            // bisa muncul di dua halaman.
             ->latest()
-            ->get();
+            ->latest('id')
+            ->paginate(self::PER_PAGE)
+            // Kata kunci pencarian ikut terbawa ke tautan halaman berikutnya.
+            ->withQueryString();
 
         return view('products.index', compact('products', 'search'));
     }

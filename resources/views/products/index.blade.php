@@ -28,7 +28,7 @@
                     @endif
                 </div>
                 <p class="search-count">
-                    <strong>{{ $products->count() }}</strong>
+                    <strong>{{ $products->total() }}</strong>
                     produk{{ $search !== '' ? ' untuk "'.$search.'"' : '' }}
                 </p>
             </form>
@@ -50,7 +50,9 @@
                 <tbody>
                     @forelse ($products as $product)
                         <tr>
-                            <td>{{ $loop->iteration }}</td>
+                            {{-- Nomor baris melanjutkan halaman sebelumnya, bukan
+                                 mulai dari 1 lagi di tiap halaman. --}}
+                            <td>{{ $products->firstItem() + $loop->index }}</td>
                             <td>
                                 <a href="{{ route('product-show', $product) }}" class="paper-link">
                                     {{ $product->name }}
@@ -97,6 +99,10 @@
                 </tbody>
             </table>
         </div>
+
+        {{-- Hanya dirender kalau halamannya lebih dari satu; tampilannya dari
+             resources/views/partials/pagination.blade.php. --}}
+        {{ $products->links() }}
 
         <div class="form-actions">
             @auth

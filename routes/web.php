@@ -28,11 +28,18 @@ Route::get('/products', [ProductController::class, 'index'])->name('product-list
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 
+    // Membuka form tidak dibatasi; yang dibatasi hanya aksi menulisnya.
     Route::get('/products/create', [ProductController::class, 'create'])->name('product-create');
-    Route::post('/products', [ProductController::class, 'store'])->name('product-store');
     Route::get('/products/{product}/edit', [ProductController::class, 'edit'])->name('product-edit');
-    Route::put('/products/{product}', [ProductController::class, 'update'])->name('product-update');
-    Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('product-destroy');
+
+    // throttle:product-write = 20 tulisan/menit per penjual, didefinisikan di
+    // AppServiceProvider::configureRateLimiting(). Pelanggaran menghasilkan 429
+    // yang dirender resources/views/errors/429.blade.php.
+    Route::middleware('throttle:product-write')->group(function () {
+        Route::post('/products', [ProductController::class, 'store'])->name('product-store');
+        Route::put('/products/{product}', [ProductController::class, 'update'])->name('product-update');
+        Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('product-destroy');
+    });
 });
 
 /*
