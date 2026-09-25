@@ -12,12 +12,16 @@ class ProductController extends Controller
     /**
      * Katalog + daftar kelola produk. Mendukung pencarian ?q=... (form GET,
      * tanpa JavaScript — sama seperti katalog pembeli di Anubis).
+     *
+     * Tamu hanya melihat produk aktif; penjual yang sudah masuk melihat
+     * semuanya (termasuk produk nonaktif untuk arsip).
      */
     public function index(Request $request): View
     {
         $search = trim((string) $request->query('q', ''));
 
         $products = Product::query()
+            ->when($request->user() === null, fn ($query) => $query->active())
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($inner) use ($search) {
                     $inner->where('name', 'like', '%'.$search.'%')

@@ -165,7 +165,11 @@
                             Jalankan <code>php artisan migrate --seed</code> untuk mengisi contoh produk,
                             atau tambah sendiri lewat tombol di bawah.
                         </p>
-                        <a href="{{ route('product-create') }}" class="btn-primary">Tambah Produk Pertama →</a>
+                        @auth
+                            <a href="{{ route('product-create') }}" class="btn-primary">Tambah Produk Pertama →</a>
+                        @else
+                            <a href="{{ route('login') }}" class="btn-secondary">Masuk sebagai penjual →</a>
+                        @endauth
                     </div>
                 @endforelse
             </div>

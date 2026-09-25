@@ -29,7 +29,16 @@
                 </a>
 
                 <nav class="masthead-actions" aria-label="Aksi akun">
-                    <a href="{{ route('product-create') }}" class="btn-secondary btn-sm">Tambah Produk</a>
+                    @auth
+                        <a href="{{ route('product-create') }}" class="btn-primary btn-sm">Tambah Produk</a>
+                        <span class="masthead-user">{{ auth()->user()->name }}</span>
+                        <form action="{{ route('logout') }}" method="post" class="inline-form">
+                            @csrf
+                            <button type="submit" class="btn-secondary btn-sm">Keluar</button>
+                        </form>
+                    @else
+                        <a href="{{ route('login') }}" class="btn-secondary btn-sm">Masuk</a>
+                    @endauth
                 </nav>
             </div>
 
@@ -87,7 +96,9 @@
                 <div class="site-footer-links">
                     <a href="{{ route('home') }}" class="site-footer-link">Beranda</a>
                     <a href="{{ route('product-list') }}" class="site-footer-link">Katalog produk</a>
-                    <a href="{{ route('product-create') }}" class="site-footer-link">Tambah produk</a>
+                    @auth
+                        <a href="{{ route('product-create') }}" class="site-footer-link">Tambah produk</a>
+                    @endauth
                     <a href="{{ route('downloader') }}" class="site-footer-link">Downloader</a>
                 </div>
             </div>
@@ -95,6 +106,14 @@
                 <p class="site-footer-heading">Toko ini</p>
                 <div class="site-footer-links">
                     <a href="{{ route('about') }}" class="site-footer-link">Cara bayar</a>
+                    @auth
+                        <form action="{{ route('logout') }}" method="post" class="inline-form">
+                            @csrf
+                            <button type="submit" class="site-footer-link site-footer-button">Keluar</button>
+                        </form>
+                    @else
+                        <a href="{{ route('login') }}" class="site-footer-link">Masuk</a>
+                    @endauth
                     <a href="https://github.com/wang-vault/anubis" class="site-footer-link" rel="noopener">Versi Next.js (asli)</a>
                     <a href="https://laravel.com/docs" class="site-footer-link" rel="noopener">Dokumentasi Laravel</a>
                 </div>
