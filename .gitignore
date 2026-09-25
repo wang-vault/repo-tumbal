@@ -22,3 +22,6 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Perkakas sandbox untuk preview PHP-WASM (bukan bagian aplikasi)
+/preview-kit/

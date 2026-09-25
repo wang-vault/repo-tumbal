@@ -62,7 +62,7 @@ class LoginController extends Controller
     /**
      * Batasi 5 percobaan masuk per menit untuk tiap email + IP.
      *
-     * @throws \Illuminate\Validation\ValidationException
+     * @throws ValidationException
      */
     protected function ensureIsNotRateLimited(Request $request): void
     {

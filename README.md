@@ -36,6 +36,7 @@ controller/model/migration/factory/seeder untuk tiap entitas (di contoh: `Studen
 | Login penjual | `POST /login` berbasis session + pembatasan 5 percobaan/menit; semua rute tulis dilindungi middleware `auth` |
 | Batas tulis | `throttle:product-write` 20/menit/penjual, `order-create` 10/menit/IP, `order-claim` 5/menit/IP, `order-status` 30/menit/penjual — lebih dari itu muncul halaman 429 |
 | Halaman error | 403, 404, 419, 429, 500 memakai tata letak yang sama (`resources/views/errors/`), bukan halaman bawaan Laravel |
+| CI | `.github/workflows/ci.yml` — matrix PHP 8.2/8.3/8.4 (install, `.env`, migrasi+seed, kompilasi Blade, `route:list`, `php artisan test`) + job `pint --test` |
 | Test | 53 pengujian: `AuthTest` (13 — login & hak akses), `ProductTest` (15 — katalog, CRUD, pagination, halaman error, throttle), `OrderTest` (18 — checkout, kode pesanan, snapshot, klaim, alur status), `TestimonialTest` (5 — privasi & batas 20), `ExampleTest` bawaan skeleton (2 — feature + unit) |
 
 **Tidak perlu `npm install` / `npm run build`.** Layout memakai `<link rel="stylesheet">` ke CSS
@@ -128,6 +129,26 @@ Login di browser: buka <http://127.0.0.1:8000/login> dengan `admin@anubis.test` 
 Mencoba alur pesan tanpa login: buka salah satu produk → **Pesan Produk Ini** → isi form →
 simpan kodenya (`ORD-…`) → di halaman rincian klik **Saya sudah transfer** → masuk sebagai
 penjual → buka `/orders` → setujui klaimnya sampai status `DONE` → lihat hasilnya di `/testimoni`.
+
+## CI & gaya kode
+
+Workflow `.github/workflows/ci.yml` jalan tiap `push` ke `main` dan tiap pull request:
+
+| Job | Isi |
+|---|---|
+| `tests` | matrix PHP **8.2 / 8.3 / 8.4**: `composer install`, `cp .env.example .env` + `key:generate`, `migrate --seed`, `view:cache` (ikut menangkap salah sintaks Blade), `route:list`, lalu `php artisan test` |
+| `style` | `pint --test` dengan preset **laravel** (`pint.json`). Pint dipasang global di runner, tidak masuk `composer.lock` supaya lock file tetap ramping |
+
+Merapikan gaya kode di mesin sendiri:
+
+```bash
+composer global require laravel/pint   # sekali saja
+pint                                   # perbaiki langsung
+pint --test                            # cuma memeriksa (ini yang dijalankan CI)
+pint app/Models/Order.php              # satu berkas saja
+```
+
+Seluruh repo ini berlisensi **MIT** (berkas `LICENSE`).
 
 ## Rute
 
@@ -291,6 +312,9 @@ tests/Feature/AuthTest.php                      13 pengujian login & hak akses
 tests/Feature/ProductTest.php                   15 pengujian katalog, CRUD, validasi, pagination, halaman error, throttle
 tests/Feature/OrderTest.php                     18 pengujian checkout, kode pesanan, snapshot harga, klaim, alur status, throttle
 tests/Feature/TestimonialTest.php               5 pengujian testimoni: hanya DONE, penyamaran nama, tanpa bocoran data, batas 20
+.github/workflows/ci.yml                        CI: test (PHP 8.2/8.3/8.4) + pemeriksaan gaya Pint
+pint.json                                       preset gaya kode: laravel
+LICENSE                                         MIT
 composer.lock                                   dari Laravel 12.68.0, content-hash cocok
 ```
 
@@ -340,10 +364,12 @@ Port ini memindahkan **etalase toko** (beranda, katalog, detail produk), **login
 | Tabel `profiles` | `supabase/account/001_schema.sql` | port ini memakai tabel `users` bawaan Laravel apa adanya |
 | Unggah gambar produk | unggah berkas ke storage | di sini hanya kolom `image_url`; kalau kosong, kartu produk menampilkan inisial nama |
 | Policy / banyak penjual | tiap penjual punya produknya | belum ada `Policy`/`Gate`: penjual mana pun yang masuk boleh mengubah produk mana pun |
-| CI, `LICENSE`, `lang/id` | ada workflow & berkas bahasa | belum disertakan |
+| Berkas bahasa `lang/id` | teks antarmuka bahasa Indonesia | pesan Indonesia di sini ditulis langsung di Blade & aturan validasi controller, jadi folder `lang/` bawaan Laravel belum dipakai |
 
 ## Kredit
 
-- Tampilan, copywriting, dan skema produk: [wang-vault/anubis](https://github.com/wang-vault/anubis) (MIT)
-- Bentuk proyek Laravel: [qwerti1945/dasar_laravel](https://github.com/qwerti1945/dasar_laravel)
+- Tampilan, copywriting, dan skema produk: [wang-vault/anubis](https://github.com/wang-vault/anubis) —
+  dipakai sebagai acuan desain & skema. Repo itu **tidak menyertakan berkas LICENSE** dan pemiliknya sama
+  (`wang-vault`), jadi port ini diterbitkan di bawah MIT
+- Bentuk proyek Laravel: [qwerti1945/dasar_laravel](https://github.com/qwerti1945/dasar_laravel) — acuan struktur (juga tanpa LICENSE)
 - Skeleton: [laravel/laravel](https://github.com/laravel/laravel) cabang `12.x` (MIT)

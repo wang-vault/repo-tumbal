@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Database\Factories\OrderFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -19,12 +20,15 @@ use Illuminate\Support\Carbon;
  */
 class Order extends Model
 {
-    /** @use HasFactory<\Database\Factories\OrderFactory> */
+    /** @use HasFactory<OrderFactory> */
     use HasFactory;
 
     public const STATUS_PENDING = 'PENDING';
+
     public const STATUS_PAID = 'PAID';
+
     public const STATUS_PROCESSING = 'PROCESSING';
+
     public const STATUS_DONE = 'DONE';
 
     /** Urutan alur status — dipakai linimasa di halaman pesanan. */

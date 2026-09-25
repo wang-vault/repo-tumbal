@@ -46,7 +46,7 @@ class TestimonialTest extends TestCase
         $this->assertSame('J***', Order::maskBuyerName('Jo'));
         $this->assertSame('Pembeli', Order::maskBuyerName(''));
         $this->assertSame('Pembeli', Order::maskBuyerName(null));
-        $this->assertSame('Siti R.', Order::maskBuyerName("  Siti   Rahayu  "));
+        $this->assertSame('Siti R.', Order::maskBuyerName('  Siti   Rahayu  '));
     }
 
     public function test_testimoni_tidak_membocorkan_data_pribadi(): void
