@@ -1,9 +1,10 @@
 # Anubis Store — versi Laravel
 
 Port **tampilan depan** [Anubis Store](https://github.com/wang-vault/anubis) (aslinya Next.js 15 +
-Supabase) ke **Laravel 12 + Blade**, dengan satu halaman template yang dipakai semua halaman
-(`<x-layouts.app>`), beranda `index.blade.php`, CRUD produk lengkap, dan alur pesanan transfer
-manual di SQLite.
+Supabase) ke **Laravel 12 + Blade**. Seluruh halaman aplikasi yang diakses melalui route memakai
+view **`.blade.php`** di `resources/views/` dan layout Blade bersama
+`resources/views/components/layouts/app.blade.php` (`<x-layouts.app>`), dengan beranda
+`welcome.blade.php`, CRUD produk lengkap, dan alur pesanan transfer manual di SQLite.
 
 Bentuk proyeknya mengikuti contoh [`qwerti1945/dasar_laravel`](https://github.com/qwerti1945/dasar_laravel):
 skeleton Laravel standar + layout component `resources/views/components/layouts/app.blade.php` +
@@ -39,12 +40,30 @@ controller/model/migration/factory/seeder untuk tiap entitas (di contoh: `Studen
 | CI | `.github/workflows/ci.yml` — matrix PHP 8.2/8.3/8.4 (install, `.env`, migrasi+seed, kompilasi Blade, `route:list`, `php artisan test`) + job `pint --test` |
 | Test | 65 pengujian: `AuthTest` (13 — login & hak akses), `ProductTest` (16 — katalog, CRUD, pagination, pencarian, halaman error, throttle), `OrderTest` (29 — checkout, kode pesanan, snapshot, klaim, alur status, ubah & hapus pesanan, status pembayaran), `TestimonialTest` (5 — privasi & batas 20), `ExampleTest` bawaan skeleton (2 — feature + unit) |
 
-**Tidak perlu `npm install` / `npm run build`.** Layout memakai `<link rel="stylesheet">` ke CSS
-statis, bukan `@vite`, jadi `php artisan serve` langsung menampilkan tampilan lengkap. (Vite +
-Tailwind bawaan skeleton tetap ada dan tetap dipakai `resources/views/welcome.blade.php` kalau
-kamu mau memakainya nanti.)
+**Tidak perlu `npm install` / `npm run build`.** Layout Blade aplikasi memakai
+`<link rel="stylesheet">` ke CSS statis `public/css/anubis.css`, bukan `@vite`, jadi
+`php artisan serve` langsung menampilkan tampilan lengkap. `resources/views/welcome.blade.php`
+merupakan view beranda aktif yang dipanggil oleh route `/` melalui `HomeController@index`.
 
 ---
+
+## Struktur view Blade
+
+Semua view aplikasi berada di `resources/views/` dan menggunakan ekstensi `.blade.php`.
+Sebagian besar halaman dibungkus layout component bersama:
+
+```blade
+<x-layouts.app title="Judul Halaman">
+    <!-- isi halaman -->
+</x-layouts.app>
+```
+
+Layout tersebut menyediakan masthead, navigasi, pesan flash, footer, dan slot konten.
+Form memakai directive Blade seperti `@csrf`, `@method`, `@error`, dan `@forelse`, sedangkan
+komponen/potongan yang dipakai ulang berada di `resources/views/products/partials/` dan
+`resources/views/partials/`. Halaman error juga memiliki partial bersama di
+`resources/views/errors/partials/notice.blade.php`. `welcome.blade.php` adalah view beranda aktif dan dirender oleh route `/`; `index.blade.php`
+merupakan salinan kompatibilitas dari template beranda.
 
 ## Login & hak akses
 
