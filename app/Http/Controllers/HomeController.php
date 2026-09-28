@@ -14,7 +14,7 @@ class HomeController extends Controller
     {
         $products = Product::active()->latest()->limit(6)->get();
 
-        return view('index', compact('products'));
+        return view('welcome', compact('products'));
     }
 
     /**
